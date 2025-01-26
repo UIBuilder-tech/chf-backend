@@ -936,9 +936,11 @@ app.post(
         }
       );
 
-      res
-        .status(200)
-        .json({ message: "Donation processed successfully.", success: true });
+      res.status(200).json({
+        message: "Donation processed successfully.",
+        success: true,
+        opportunity: opportunity.id,
+      });
     } catch (error) {
       console.error(error);
       res.status(500).json({
@@ -1175,10 +1177,11 @@ app.patch(
   async (req, res) => {
     try {
       const opportunityId = req.params.id;
+      const { stageName } = req.body;
       const data = await salesforceRequest(
         "PATCH",
         `sobjects/Opportunity/${opportunityId}`,
-        req.body
+        { StageName: stageName }
       );
       res.json(data);
     } catch (error) {
