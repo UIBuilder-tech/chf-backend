@@ -7,9 +7,6 @@ require("dotenv").config();
 const app = express();
 const PORT = 4242;
 
-app.get("/health", (req, res) => {
-  res.json({ message: "Server Health is Fine" });
-});
 // Middleware
 app.use(cors());
 const corsOptions = {
@@ -20,6 +17,13 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+
+
+app.get("/health", (req, res) => {
+console.log('Request headers:', req.headers); 
+ res.json({ message: "Server Health is Fine" });
+});
 
 // Salesforce Config
 const BASE_URL = process.env.API_SALESFORCE_INSTATE;
