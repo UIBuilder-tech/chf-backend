@@ -709,6 +709,9 @@ app.post(
       } else if (tnxId === "zelle") {
         stageName = "Payment Pending";
         Transaction_ID__c = `Zelle-${generateRandomString(13)}`;
+      }else{
+        stageName = "Payment Pending";
+        Transaction_ID__c = `Online-${generateRandomString(13)}`;
       }
       console.log(
         "displayName: " + displayName,
