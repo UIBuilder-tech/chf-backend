@@ -932,12 +932,17 @@ const calculateOrderAmount = (items) => {
   items.forEach((item) => {
     total += item.amount;
   });
-  return total;
+  return Math.round(total * 100);
 };
 
 app.post("/api/b3/r1/create-payment-intent", async (req, res) => {
   const { items } = req.body;
   console.log("🚀 ~ app.post ~ items:", items);
+  console.log("intent", {
+    amount: calculateOrderAmount(items),
+    currency: "usd",
+    automatic_payment_methods: { enabled: true },
+  });
 
   try {
     const paymentIntent = await stripe.paymentIntents.create({
@@ -949,6 +954,7 @@ app.post("/api/b3/r1/create-payment-intent", async (req, res) => {
     // Return client secret only
     res.status(200).send({ clientSecret: paymentIntent.client_secret });
   } catch (error) {
+    console.log("error", error);
     res.status(500).send(error);
   }
 });
