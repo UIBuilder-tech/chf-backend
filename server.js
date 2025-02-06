@@ -475,7 +475,7 @@ app.post(
       await salesforceRequest("PATCH", `sobjects/Contact/${contactId}`, {
         FirstName: firstName,
         LastName: lastName,
-        MobilePhone: mobile,
+        Phone: mobile,
       });
 
       res.status(200).json({
@@ -537,11 +537,12 @@ app.post(
 
       // Check if memHidId is provided for update
       if (memHidId) {
-        const checkContactQuery = `SELECT Id FROM Contact WHERE Id = '${memHidId}' AND Account.RecordTypeId = '${accountId}'`;
+        const checkContactQuery = `SELECT Id FROM Contact WHERE Id = '${memHidId}'`;
         const checkContact = await salesforceRequest(
           "GET",
           `query?q=${encodeURIComponent(checkContactQuery)}`
         );
+        console.log(checkContact, memHidId);
 
         if (checkContact.totalSize === 0) {
           return res
