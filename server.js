@@ -252,7 +252,7 @@ app.post(
 
       // Create Contact
       // const domain = req.get("host");
-      const activationLink = `http://${DOMAIN}/activate/${Buffer.from(
+      const activationLink = `https://${DOMAIN}/activate/${Buffer.from(
         emailid
       ).toString("base64")}/${generateActivationToken(emailid)}`;
 
