@@ -716,12 +716,12 @@ app.post(
       }
 
       // Adjust stage name based on transaction ID
-      if (tnxId === "cheque") {
+      if (tnxId === "check") {
         stageName = "Payment Pending";
         Transaction_ID__c = `Check-${generateRandomString(12)}`;
       } else if (tnxId === "zelle") {
         stageName = "Payment Pending";
-        Transaction_ID__c = `Zelle-${generateRandomString(13)}`;
+        Transaction_ID__c = `Check-Zelle-${generateRandomString(13)}`;
       } else {
         stageName = "Payment Pending";
         Transaction_ID__c = `Online-${generateRandomString(13)}`;
