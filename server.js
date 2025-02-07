@@ -354,18 +354,18 @@ app.post(
       }
 
       // const domain = req.get("host");
-      const resetPwdLink = `http://${DOMAIN}/forgot-password/${Buffer.from(
+      const resetPwdLink = `https://${DOMAIN}/forgot-password/${Buffer.from(
         forgot_email
       ).toString("base64")}/${generateActivationToken(forgot_email)}`;
 
       await salesforceRequest("PATCH", `sobjects/Contact/${contactRecord.Id}`, {
         Reset_Pwd_Link__c: resetPwdLink,
+        Is_Reset__c: false,
       });
 
       res.status(200).json({
         message: "Password reset link is sent to the regesterd email",
         success: true,
-        link: resetPwdLink,
       });
     } catch (error) {
       res
@@ -405,6 +405,7 @@ app.post(
         {
           // Password__c: newPassword,
           Password__c: encryptVal(newPassword),
+          Is_Reset__c: true,
         }
       );
 
@@ -448,6 +449,7 @@ app.post(
         `sobjects/Contact/${contact.records[0].Id}`,
         {
           Password__c: encryptVal(newPassword),
+          Is_Reset__c: true,
         }
       );
 
