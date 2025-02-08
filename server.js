@@ -263,6 +263,7 @@ app.post(
         Phone: usernumber,
         Password__c: encryptVal(userpwd),
         Activate_Link__c: activationLink,
+        Base_URL__c: DOMAIN,
       });
 
       res.status(201).json({
@@ -295,7 +296,7 @@ app.get(
       if (contact.totalSize === 0 || contact.records[0].Is_Email_Verify__c) {
         return res
           .status(400)
-          .json({ message: "Inavlid Link.", success: false, error: error });
+          .json({ message: "Inavlid Link.", success: false });
       }
 
       await salesforceRequest(
@@ -1123,6 +1124,55 @@ app.post(
       res.status(201).json(data);
     } catch (error) {
       res.status(500).json(error);
+    }
+  }
+);
+
+app.get(
+  "/api/b3/r1/activate/admin/:contactId/:status",
+  ensureSalesforceAccessToken,
+  async (req, res) => {
+    const { contactId, status } = req.params;
+
+    try {
+      const contactQuery = `SELECT Id, CHF_Account_Status__c FROM Contact WHERE Id = '${contactId}'`;
+      const contact = await salesforceRequest(
+        "GET",
+        `query?q=${encodeURIComponent(contactQuery)}`
+      );
+      console.log(contact.records[0]);
+
+      if (
+        contact.totalSize === 0 ||
+        contact.records[0].CHF_Account_Status__c === "Approve"
+      ) {
+        console.log("here");
+        return res.status(400).json({
+          message: "Inavlid Link. Email already approved.",
+          success: false,
+        });
+      }
+
+      await salesforceRequest(
+        "PATCH",
+        `sobjects/Contact/${contact.records[0].Id}`,
+        {
+          CHF_Account_Status__c: status ? "Approve" : "Reject",
+        }
+      );
+
+      // res.redirect("/login");
+      res.status(201).json({
+        message: status
+          ? "Email approved successful"
+          : "Email rejected successful",
+        success: true,
+      });
+    } catch (error) {
+      console.log(error);
+      res
+        .status(500)
+        .json({ message: "Approval Failed.", success: false, error: error });
     }
   }
 );
