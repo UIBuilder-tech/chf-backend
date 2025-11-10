@@ -2,8 +2,19 @@ const express = require("express");
 const axios = require("axios");
 const crypto = require("crypto");
 const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
 
-require("dotenv").config();
+// Load env vars: use .env.local in development, otherwise fallback to .env
+const envLocalPath = path.resolve(process.cwd(), ".env.local");
+const envPath = path.resolve(process.cwd(), ".env");
+if (process.env.NODE_ENV === "development" && fs.existsSync(envLocalPath)) {
+  require("dotenv").config({ path: envLocalPath });
+} else if (fs.existsSync(envPath)) {
+  require("dotenv").config({ path: envPath });
+} else {
+  require("dotenv").config();
+}
 
 const app = express();
 const PORT = 4242;
@@ -742,6 +753,7 @@ app.post(
         "GET",
         `query?q=${encodeURIComponent(contactQuery)}`
       );
+      console.log("contact", contact);
 
       if (contact.totalSize > 0) {
         const donorRecord = contact.records[0];
@@ -790,6 +802,7 @@ app.post(
         "GET",
         `query?q=${encodeURIComponent(recordTypeQuery)}`
       );
+      console.log("recordType", recordType);
 
       const opportunityData = {
         AccountId: accountId,
@@ -801,6 +814,7 @@ app.post(
         RecordTypeId: recordType.records[0].Id,
         // Description: donationCategories?.toString(),
       };
+      console.log("opportunityData", opportunityData);
       const opportunity = await salesforceRequest(
         "POST",
         "sobjects/Opportunity",
@@ -826,6 +840,7 @@ app.post(
         "composite/batch",
         compositePayload
       );
+      console.log("compositeResponse", compositeResponse);
 
       // Handle responses
       compositeResponse.results.forEach((result, index) => {
@@ -850,6 +865,7 @@ app.post(
           EmailTriggered__c: false,
         }
       );
+      console.log("opportunity", opportunity);
 
       res.status(200).json({
         message: "Donation processed successfully.",
@@ -962,6 +978,197 @@ app.post("/api/b3/r1/create-payment-intent", async (req, res) => {
   }
 });
 // ========== END STRIPE CODE ==========
+
+// Sevas
+app.post(
+  "/api/b3/r1/sevas/create",
+  ensureSalesforceAccessToken,
+  async (req, res) => {
+    const {
+      donAmt, // Total donation amount
+      donorName, // Full name of the donor
+      displayName, // Display name for the donation record
+      donorEmail, // Donor's email
+      donorMobile, // Donor's mobile number
+      donorBillSt, // Donor's billing street
+      donorCity, // Donor's billing city
+      donorState, // Donor's billing state
+      donorZip, // Donor's billing zip/postal code
+      donorCountry, // Donor's billing country
+      tnxId, // Transaction ID or payment mode
+      donationCategories, // Array of donation category objects
+    } = req.body;
+
+    let accountId = req.session?.accountId || null;
+    let donorFirstName = "";
+    let donorLastName = "";
+    let contRecId = null;
+    let stageName = "Payment Pending";
+    // let stageName = "Payment Pending";
+    let Transaction_ID__c = tnxId;
+
+    try {
+      const todayDate = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
+
+      // Split donor name into first and last name
+      if (donorName.includes(" ")) {
+        const nameParts = donorName.split(" ");
+        donorLastName = nameParts.pop();
+        donorFirstName = nameParts.join(" ");
+      } else {
+        donorFirstName = donorName;
+        donorLastName = donorName;
+      }
+
+      // Adjust stage name based on transaction ID
+      if (tnxId === "check") {
+        stageName = "Payment Pending";
+        Transaction_ID__c = `Check-${generateRandomString(12)}`;
+      } else if (tnxId === "zelle") {
+        stageName = "Payment Pending";
+        Transaction_ID__c = `Check-Zelle-${generateRandomString(13)}`;
+      } else {
+        stageName = "Payment Pending";
+        Transaction_ID__c = `Online-${generateRandomString(13)}`;
+      }
+      console.log(
+        "displayName: " + displayName,
+        "tnxId: " + tnxId,
+        "stageName: " + stageName,
+        "Transaction_ID__c: " + Transaction_ID__c
+      );
+
+      // Check if donor exists
+      const contactQuery = `SELECT Id, Name, AccountId FROM Contact WHERE Email = '${donorEmail}'`;
+      const contact = await salesforceRequest(
+        "GET",
+        `query?q=${encodeURIComponent(contactQuery)}`
+      );
+
+      if (contact.totalSize > 0) {
+        const donorRecord = contact.records[0];
+        accountId = donorRecord.AccountId;
+        contRecId = donorRecord.Id;
+      } else {
+        // Create new donor contact
+        const contactData = {
+          FirstName: donorFirstName,
+          LastName: donorLastName,
+          Email: donorEmail,
+          MobilePhone: donorMobile,
+        };
+        const newContact = await salesforceRequest(
+          "POST",
+          "sobjects/Contact",
+          contactData
+        );
+        contRecId = newContact.id;
+
+        // Update donor's account with billing details
+        const accountQuery = `SELECT AccountId FROM Contact WHERE Id = '${newContact.id}'`;
+        const account = await salesforceRequest(
+          "GET",
+          `query?q=${encodeURIComponent(accountQuery)}`
+        );
+        accountId = account.records[0].AccountId;
+
+        const accountData = {
+          BillingStreet: donorBillSt,
+          BillingCity: donorCity,
+          BillingState: donorState,
+          BillingPostalCode: donorZip,
+          BillingCountry: donorCountry,
+        };
+        await salesforceRequest(
+          "PATCH",
+          `sobjects/Account/${accountId}`,
+          accountData
+        );
+      }
+
+      // Create sevas opportunity
+      const recordTypeQuery = `SELECT Id FROM RecordType WHERE Name = 'Sevas'`;
+      const recordType = await salesforceRequest(
+        "GET",
+        `query?q=${encodeURIComponent(recordTypeQuery)}`
+      );
+      console.log("recordType", recordType);
+
+      const opportunityData = {
+        AccountId: accountId,
+        Amount: donAmt,
+        StageName: stageName,
+        CloseDate: todayDate,
+        Name: displayName,
+        Donor__c: contRecId,
+        RecordTypeId: recordType.records[0].Id,
+        // Description: donationCategories?.toString(),
+      };
+      const opportunity = await salesforceRequest(
+        "POST",
+        "sobjects/Opportunity",
+        opportunityData
+      );
+      const compositePayload = {
+        batchRequests: donationCategories.map((category) => ({
+          method: "POST",
+          url: `/services/data/${API_VERSION}/sobjects/DonationSummary__c`,
+          richInput: {
+            Opportunity__c: opportunity.id,
+            Campaign_Name__c: category.projectName,
+            Amount__c: category.unitAmount,
+            Quantity__c: category.quantity,
+            Remark__c: category.remark,
+          },
+        })),
+      };
+
+      // Send the batch request to Salesforce
+      const compositeResponse = await salesforceRequest(
+        "POST",
+        "composite/batch",
+        compositePayload
+      );
+
+      // Handle responses
+      compositeResponse.results.forEach((result, index) => {
+        if (result.statusCode >= 400) {
+          console.error(
+            `Failed for category: ${donationCategories[index].projectName}`,
+            result.result
+          );
+        } else {
+          console.log(
+            `Success for category: ${donationCategories[index].projectName}`
+          );
+        }
+      });
+
+      // Update opportunity with transaction details
+      await salesforceRequest(
+        "PATCH",
+        `sobjects/Opportunity/${opportunity.id}`,
+        {
+          Transaction_ID__c: Transaction_ID__c,
+          EmailTriggered__c: false,
+        }
+      );
+
+      res.status(200).json({
+        message: "Donation processed successfully.",
+        success: true,
+        opportunity: opportunity.id,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({
+        message: "Failed to process donation.",
+        error,
+        success: false,
+      });
+    }
+  }
+);
 
 // ========== SALESFORCE ROUTES (with ensureSalesforceAccessToken) ==========
 
