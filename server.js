@@ -31,7 +31,6 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 app.get("/api/b3/r1/health", (req, res) => {
-  console.log("Request headers:", req.headers);
   res.json({ message: "Server Health is Fine" });
 });
 
@@ -43,7 +42,6 @@ let accessToken = null;
 
 // Salesforce Access Token Refresh
 const refreshAccessToken = async () => {
-  console.log("refreshAccessToken");
   try {
     const response = await axios.post(
       `${BASE_URL}/services/oauth2/token`,
@@ -59,9 +57,7 @@ const refreshAccessToken = async () => {
         },
       }
     );
-    // console.log(response);
     accessToken = response.data.access_token;
-    console.log("accessToken", accessToken);
   } catch (error) {
     throw new Error("Failed to refresh Salesforce access token");
   }
@@ -71,7 +67,6 @@ const refreshAccessToken = async () => {
 const ensureSalesforceAccessToken = async (req, res, next) => {
   try {
     await refreshAccessToken();
-    console.log("Access Token Refreshed");
     req.headers["Authorization"] = `Bearer ${accessToken}`;
     next();
   } catch (error) {
@@ -129,9 +124,7 @@ app.post(
   "/api/b3/r1/auth/login",
   ensureSalesforceAccessToken,
   async (req, res) => {
-    console.log("req.body", req.body);
     const { email, password } = req.body;
-    console.log(email, password);
 
     try {
       // Validate reCAPTCHA
@@ -152,14 +145,12 @@ app.post(
         "GET",
         `query?q=${encodeURIComponent(contactQuery)}`
       );
-      console.log(contact);
 
       if (contact.totalSize === 0) {
         return res.status(404).json({ message: "User not found" });
       }
 
       const contactRecord = contact.records[0];
-      console.log(contactRecord);
 
       if (
         contactRecord.CHF_Account_Status__c !== "Approve" ||
@@ -172,22 +163,10 @@ app.post(
 
       const decryptedPassword = decryptVal(contactRecord.Password__c);
       //    const decryptedPassword = decryptVal(contactRecord.Password__c);
-      console.log("decryptedPassword", decryptedPassword);
 
       if (decryptedPassword !== password) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
-      console.log({
-        message: "Login successful",
-        data: {
-          userId: contactRecord.Id,
-          email,
-          firstName: contactRecord.FirstName,
-          lastName: contactRecord.LastName,
-        },
-        success: true,
-      });
-
       res.status(200).json({
         message: "Login successful",
         data: {
@@ -199,7 +178,6 @@ app.post(
         success: true,
       });
     } catch (error) {
-      console.log(error);
       res.status(500).json({ message: "Login failed", error });
     }
   }
@@ -556,8 +534,6 @@ app.post(
           "GET",
           `query?q=${encodeURIComponent(checkContactQuery)}`
         );
-        console.log(checkContact, memHidId);
-
         if (checkContact.totalSize === 0) {
           return res
             .status(404)
@@ -740,12 +716,6 @@ app.post(
         stageName = "Payment Pending";
         Transaction_ID__c = `Online-${generateRandomString(13)}`;
       }
-      console.log(
-        "displayName: " + displayName,
-        "tnxId: " + tnxId,
-        "stageName: " + stageName,
-        "Transaction_ID__c: " + Transaction_ID__c
-      );
 
       // Check if donor exists
       const contactQuery = `SELECT Id, Name, AccountId FROM Contact WHERE Email = '${donorEmail}'`;
@@ -753,7 +723,6 @@ app.post(
         "GET",
         `query?q=${encodeURIComponent(contactQuery)}`
       );
-      console.log("contact", contact);
 
       if (contact.totalSize > 0) {
         const donorRecord = contact.records[0];
@@ -802,7 +771,6 @@ app.post(
         "GET",
         `query?q=${encodeURIComponent(recordTypeQuery)}`
       );
-      console.log("recordType", recordType);
 
       const opportunityData = {
         AccountId: accountId,
@@ -814,7 +782,6 @@ app.post(
         RecordTypeId: recordType.records[0].Id,
         // Description: donationCategories?.toString(),
       };
-      console.log("opportunityData", opportunityData);
       const opportunity = await salesforceRequest(
         "POST",
         "sobjects/Opportunity",
@@ -840,7 +807,6 @@ app.post(
         "composite/batch",
         compositePayload
       );
-      console.log("compositeResponse", compositeResponse);
 
       // Handle responses
       compositeResponse.results.forEach((result, index) => {
@@ -850,9 +816,6 @@ app.post(
             result.result
           );
         } else {
-          console.log(
-            `Success for category: ${donationCategories[index].projectName}`
-          );
         }
       });
 
@@ -865,7 +828,6 @@ app.post(
           EmailTriggered__c: false,
         }
       );
-      console.log("opportunity", opportunity);
 
       res.status(200).json({
         message: "Donation processed successfully.",
@@ -944,8 +906,6 @@ const generateRandomString = (length) => {
 // ========== STRIPE CODE (UNCHANGED) ==========
 const stripe = require("stripe")(`${process.env.VITE_STRIPE_CLIENT_SECRET}`);
 
-console.log("VITE_STRIPE_CLIENT_SECRET", process.env.VITE_STRIPE_CLIENT_SECRET);
-
 const calculateOrderAmount = (items) => {
   let total = 0;
   items.forEach((item) => {
@@ -956,13 +916,6 @@ const calculateOrderAmount = (items) => {
 
 app.post("/api/b3/r1/create-payment-intent", async (req, res) => {
   const { items } = req.body;
-  console.log("🚀 ~ app.post ~ items:", items);
-  console.log("intent", {
-    amount: calculateOrderAmount(items),
-    currency: "usd",
-    automatic_payment_methods: { enabled: true },
-  });
-
   try {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: calculateOrderAmount(items),
@@ -973,7 +926,6 @@ app.post("/api/b3/r1/create-payment-intent", async (req, res) => {
     // Return client secret only
     res.status(200).send({ clientSecret: paymentIntent.client_secret });
   } catch (error) {
-    console.log("error", error);
     res.status(500).send(error);
   }
 });
@@ -997,6 +949,7 @@ app.post(
       donorCountry, // Donor's billing country
       tnxId, // Transaction ID or payment mode
       donationCategories, // Array of donation category objects
+      description, // Array of donation category objects
     } = req.body;
 
     let accountId = req.session?.accountId || null;
@@ -1031,12 +984,6 @@ app.post(
         stageName = "Payment Pending";
         Transaction_ID__c = `Online-${generateRandomString(13)}`;
       }
-      console.log(
-        "displayName: " + displayName,
-        "tnxId: " + tnxId,
-        "stageName: " + stageName,
-        "Transaction_ID__c: " + Transaction_ID__c
-      );
 
       // Check if donor exists
       const contactQuery = `SELECT Id, Name, AccountId FROM Contact WHERE Email = '${donorEmail}'`;
@@ -1092,7 +1039,6 @@ app.post(
         "GET",
         `query?q=${encodeURIComponent(recordTypeQuery)}`
       );
-      console.log("recordType", recordType);
 
       const opportunityData = {
         AccountId: accountId,
@@ -1102,7 +1048,7 @@ app.post(
         Name: displayName,
         Donor__c: contRecId,
         RecordTypeId: recordType.records[0].Id,
-        // Description: donationCategories?.toString(),
+        Description: description,
       };
       const opportunity = await salesforceRequest(
         "POST",
@@ -1138,9 +1084,6 @@ app.post(
             result.result
           );
         } else {
-          console.log(
-            `Success for category: ${donationCategories[index].projectName}`
-          );
         }
       });
 
@@ -1181,7 +1124,6 @@ app.get("/api/b3/r1/contact", ensureSalesforceAccessToken, async (req, res) => {
       "GET",
       `query?q=${encodeURIComponent(query)}`
     );
-    console.log("data", data?.records[0]);
     const query1 = `SELECT ID, BILLINGSTREET, BILLINGCITY, BILLINGSTATE, BILLINGCOUNTRY, BILLINGPOSTALCODE, SHIPPINGSTREET,SHIPPINGCITY,SHIPPINGCOUNTRY, SHIPPINGSTATE, SHIPPINGPOSTALCODE FROM Account WHERE Id = '${data?.records[0]?.Account?.Id}'`;
     const data1 = await salesforceRequest(
       "GET",
@@ -1195,7 +1137,6 @@ app.get("/api/b3/r1/contact", ensureSalesforceAccessToken, async (req, res) => {
       data1?.records[0]?.BillingState === data1?.records[0]?.ShippingState &&
       data1?.records[0]?.BillingPostalCode ===
         data1?.records[0]?.ShippingPostalCode;
-    console.log(sameAddress);
 
     res.json({
       firstName: data?.records[0]?.FirstName,
@@ -1255,18 +1196,7 @@ app.patch(
         "GET",
         `query?q=${encodeURIComponent(query)}`
       );
-      console.log({
-        BillingCity: req.body.billingCity,
-        BillingCountry: req.body.billingCountry,
-        BillingPostalCode: req.body.billingPostalCode,
-        BillingState: req.body.billingState,
-        BillingStreet: req.body.billingStreet,
-        ShippingCity: req.body.shippingCity,
-        ShippingCountry: req.body.shippingCountry,
-        ShippingPostalCode: req.body.shippingPostalCode,
-        ShippingState: req.body.shippingState,
-        ShippingStreet: req.body.shippingStreet,
-      });
+
       const data = await salesforceRequest(
         "PATCH",
         `sobjects/Account/${contactData?.records[0]?.Account?.Id}`,
@@ -1304,7 +1234,6 @@ app.patch(
     try {
       const opportunityId = req.params.id;
       const { stageName } = req.body;
-      console.log("stageName", stageName);
       const data = await salesforceRequest(
         "PATCH",
         `sobjects/Opportunity/${opportunityId}`,
@@ -1347,13 +1276,11 @@ app.get(
         "GET",
         `query?q=${encodeURIComponent(contactQuery)}`
       );
-      console.log(contact.records[0]);
 
       if (
         contact.totalSize === 0 ||
         contact.records[0].CHF_Account_Status__c === "Approve"
       ) {
-        console.log("here");
         return res.status(400).json({
           message: "Inavlid Link. Email already approved.",
           success: false,
@@ -1376,7 +1303,6 @@ app.get(
         success: true,
       });
     } catch (error) {
-      console.log(error);
       res
         .status(500)
         .json({ message: "Approval Failed.", success: false, error: error });
